@@ -34,18 +34,20 @@ with open(dump_file, 'r') as i_file:
   # obtain list of all & busy GPUs
   parse_procs = False
   all_gpus, busy_gpus = [], []
+  # print("start")
   for i_line in i_file:
     if 'Processes' in i_line:
       parse_procs = True
     sub_strs = i_line.split()
+    # print(sub_strs)
     if len(sub_strs) < 2:
       continue
     if not parse_procs:
       if sub_strs[1].isdigit():
         all_gpus.append(sub_strs[1])
-    else:
-      if sub_strs[1].isdigit():
-        busy_gpus.append(sub_strs[1])
+    # else:
+    #   if sub_strs[1].isdigit():
+    #     busy_gpus.append(sub_strs[1])
 
   # obtain list of idle GPUs
   idle_gpus = list(set(all_gpus) - set(busy_gpus))
