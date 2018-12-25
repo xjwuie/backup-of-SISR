@@ -185,6 +185,15 @@ def setup_lrn_rate_mobilenet_v2_ilsvrc12(global_step, batch_size):
 
   return lrn_rate, nb_batches
 
+def setup_lrn_rate_edsr_myDataset(global_step, batch_size):
+  nb_epochs = 20
+  idxs_epoch = [10, 15, 18]
+  decay_rates = [1.0, 0.1, 0.01, 0.001]
+  lrn_rate = setup_lrn_rate_piecewise_constant(global_step, batch_size, idxs_epoch, decay_rates)
+  nb_batches = calc_nb_batches(nb_epochs, batch_size)
+
+  return lrn_rate, nb_batches
+
 def setup_lrn_rate(global_step, model_name, dataset_name):
   """Setup the learning rate for the given dataset.
 
@@ -222,6 +231,8 @@ def setup_lrn_rate(global_step, model_name, dataset_name):
       lrn_rate, nb_batches = setup_lrn_rate_mobilenet_v2_ilsvrc12(global_step, batch_size)
     else:
       raise NotImplementedError('model: {} / dataset: {}'.format(model_name, dataset_name))
+  elif dataset_name == 'myDataset':
+    lrn_rate, nb_batches = setup_lrn_rate_edsr_myDataset(global_step, batch_size)
   else:
     raise NotImplementedError('dataset: ' + dataset_name)
 

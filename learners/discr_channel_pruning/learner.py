@@ -39,6 +39,51 @@ tf.app.flags.DEFINE_float('dcp_lrn_rate_adam', 1e-3, 'DCP: Adam\'s learning rate
 tf.app.flags.DEFINE_integer('dcp_nb_iters_block', 10000, 'DCP: # of iterations for block-wise FT')
 tf.app.flags.DEFINE_integer('dcp_nb_iters_layer', 500, 'DCP: # of iterations for layer-wise FT')
 
+image_low = 48
+def upsample(x, scale=2, features=64, activation=None):
+  assert scale in [2, 3, 4]
+  if scale == 2:
+    ps_features = 3 * (scale ** 2)
+    x = tf.layers.conv2d(x, ps_features, [3, 3], padding='SAME')
+    # x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+    x = PS(x, 2, color=True)
+  elif scale == 3:
+    ps_features = 3 * (scale ** 2)
+    x = tf.layers.conv2d(x, ps_features, [3, 3], padding='SAME')
+    # x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation_fn=activation)
+    x = PS(x, 3, color=True)
+  elif scale == 4:
+    ps_features = 3 * (2 ** 2)
+    for i in range(2):
+      x = tf.layers.conv2d(x, ps_features, [3, 3], padding='SAME')
+      # x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+      x = PS(x, 2, color=True)
+  return x
+
+
+def _phase_shift(I, r):
+  bsize, a, b, c = I.get_shape().as_list()
+  dims = I.get_shape().as_list()
+  a = b = image_low
+  bsize = tf.shape(I)[0]  # Handling Dimension(None) type for undefined batch dim
+  X = tf.reshape(I, shape=[-1, a, b, r, r])
+  X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
+  X = tf.split(X, a, 1)  # a, [bsize, b, r, r]
+  X = tf.concat([tf.squeeze(x, axis=1) for x in X], 2)  # bsize, b, a*r, r
+  X = tf.split(X, b, 1)  # b, [bsize, a*r, r]
+  X = tf.concat([tf.squeeze(x, axis=1) for x in X], 2)  # bsize, a*r, b*r
+  return tf.reshape(X, (bsize, a * r, b * r, 1))
+
+
+def PS(X, r, color=False):
+  if color:
+    Xc = tf.split(X, 3, 3)
+    X = tf.concat([_phase_shift(x, r) for x in Xc], 3)
+  else:
+    X = _phase_shift(X, r)
+  return X
+
+
 def get_vars_by_scope(scope):
   """Get list of variables within certain name scope.
 
@@ -193,6 +238,7 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
       with tf.variable_scope(self.data_scope):
         iterator = self.build_dataset_train()
         images, labels = iterator.get_next()
+
 
       # model definition - distilled model
       if FLAGS.enbl_dst:
@@ -356,11 +402,20 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
       idxs_layer_to_block += [int(idx_layer / nb_layers_per_block)]
       if (idx_layer + 1) % nb_layers_per_block == 0:
         x = core_ops_prnd[idx_layer].outputs[0]
-        x = tf.layers.batch_normalization(x, axis=3, training=True)
-        x = tf.nn.relu(x)
-        x = tf.reduce_mean(x, axis=[1, 2])
-        x = tf.layers.dense(x, FLAGS.nb_classes)
-        dis_losses += [tf.losses.softmax_cross_entropy(labels, x)]
+
+        # x = tf.layers.batch_normalization(x, axis=3, training=True)
+        # x = tf.nn.relu(x)
+        # x = tf.reduce_mean(x, axis=[1, 2])
+        # x = tf.layers.dense(x, FLAGS.nb_classes)
+        # print(x.get_shape().as_list())
+        # dis_losses += [tf.losses.softmax_cross_entropy(labels, x)]
+
+        # print(labels.get_shape().as_list())
+        # print(x.get_shape().as_list())
+
+        x = upsample(x, 2, 128)
+        diff = tf.abs(labels - x)
+        dis_losses += [tf.reduce_mean(diff)]
     tf.logging.info('layer-to-block mapping: {}'.format(idxs_layer_to_block))
 
     return reg_losses, dis_losses, idxs_layer_to_block

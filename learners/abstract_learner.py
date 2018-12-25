@@ -29,7 +29,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('model_http_url', None, 'HTTP/HTTPS url for remote model files')
 tf.app.flags.DEFINE_integer('summ_step', 100, 'summarizaton step size')
-tf.app.flags.DEFINE_integer('save_step', 10000, 'model saving step size')
+tf.app.flags.DEFINE_integer('save_step', 2000, 'model saving step size')
 tf.app.flags.DEFINE_string('save_path', './models/model.ckpt', 'model\'s save path')
 tf.app.flags.DEFINE_string('save_path_eval', './models_eval/model.ckpt',
                            'model\'s save path for evaluation')
