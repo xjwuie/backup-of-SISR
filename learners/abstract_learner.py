@@ -29,7 +29,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('model_http_url', None, 'HTTP/HTTPS url for remote model files')
 tf.app.flags.DEFINE_integer('summ_step', 100, 'summarizaton step size')
-tf.app.flags.DEFINE_integer('save_step', 2000, 'model saving step size')
+tf.app.flags.DEFINE_integer('save_step', 4000, 'model saving step size')
 tf.app.flags.DEFINE_string('save_path', './models/model.ckpt', 'model\'s save path')
 tf.app.flags.DEFINE_string('save_path_eval', './models_eval/model.ckpt',
                            'model\'s save path for evaluation')
@@ -79,6 +79,8 @@ class AbstractLearner(ABC):  # pylint: disable=too-many-instance-attributes
     self.calc_loss = model_helper.calc_loss
     self.model_name = model_helper.model_name
     self.dataset_name = model_helper.dataset_name
+
+    self.time_op = None
 
     # checkpoint path determined by model's & dataset's names
     self.ckpt_file = 'models_%s_at_%s.tar.gz' % (self.model_name, self.dataset_name)

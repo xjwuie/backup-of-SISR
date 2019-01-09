@@ -1,5 +1,8 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+import time
+from PIL import Image
+import os
 
 from nets.abstract_model_helper import AbstractModelHelper
 from datasets.edsr_dataset import EdsrDataset
@@ -12,6 +15,7 @@ tf.app.flags.DEFINE_float('momentum', 0.9, 'momentum coefficient')
 tf.app.flags.DEFINE_float('loss_w_dcy', 5e-6, 'weight decaying loss\'s coefficient')
 
 image_low = 48
+
 
 
 def resBlock(x, index, data_format, channels=256, kernel_size=[3, 3], scale=0.1):
@@ -78,8 +82,8 @@ def log10(x):
 
 
 def forward_fn(inputs, data_format):
-    features = 64
-    layer_num = 16
+    features = 64   # default 64
+    layer_num = 8  # default 16
     scaling_factor = 0.1
     scale = 2
 
@@ -110,6 +114,8 @@ class ModelHelper(AbstractModelHelper):
         self.dataset_train = EdsrDataset(is_train=True)
         self.dataset_eval = EdsrDataset(is_train=False)
 
+        self.out_idx = 0
+
     def build_dataset_train(self, enbl_trn_val_split=False):
         """Build the data subset for training, usually with data augmentation."""
 
@@ -127,6 +133,7 @@ class ModelHelper(AbstractModelHelper):
         return forward_fn(inputs, data_format)
 
     def calc_loss(self, labels, outputs, trainable_vars):
+        # t = time.time()
         # outputs = outputs - tf.reduce_mean(outputs)
         # labels = labels - tf.reduce_mean(labels)
         # outputs = outputs - tf.reduce_mean(outputs)
@@ -134,10 +141,21 @@ class ModelHelper(AbstractModelHelper):
         # loss += FLAGS.loss_w_dcy * tf.add_n([tf.nn.l2_loss(var) for var in trainable_vars])
 
         mse = tf.reduce_mean(tf.squared_difference(labels, outputs))
+
         PSNR = tf.constant(255 ** 2, dtype=tf.float32) / mse
         PSNR = tf.constant(10, dtype=tf.float32) * log10(PSNR)
         accuracy = PSNR
+        # time_useless = tf.constant(1, dtype=tf.float32) * [time.time() - t]
+        # metrics = {'accuracy': accuracy, 'time_useless': [time.time() - t]}
         metrics = {'accuracy': accuracy}
+        # print("the time is")
+        # print(time_useless)
+        # if self.out_idx < 10:
+        #     img = Image.fromarray(outputs[0], 'RGB')
+        #     raw = Image.fromarray(labels[0], 'RGB')
+        #     img.save('out_example/img' + str(self.out_idx) + '.jpg')
+        #     raw.save('out_example/raw' + str(self.out_idx) + '.jpg')
+        #     self.out_idx += 1
 
         return loss, metrics
 

@@ -20,6 +20,8 @@ import os
 from timeit import default_timer as timer
 import numpy as np
 import tensorflow as tf
+import time
+from PIL import Image
 
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
@@ -94,10 +96,36 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
     self.__restore_model(is_train=False)
     nb_iters = int(np.ceil(float(FLAGS.nb_smpls_eval) / FLAGS.batch_size))
     eval_rslts = np.zeros((nb_iters, len(self.eval_op)))
+
     for idx_iter in range(nb_iters):
       eval_rslts[idx_iter] = self.sess_eval.run(self.eval_op)
+
+    # t_useless = np.sum(eval_rslts[:, -1])
+
     for idx, name in enumerate(self.eval_op_names):
       tf.logging.info('%s = %.4e' % (name, np.mean(eval_rslts[:, idx])))
+
+    t = time.time()
+    for idx_iter in range(nb_iters):
+      _ = self.sess_eval.run(self.time_op)
+
+    t = time.time() - t
+    images, outputs, labels = self.sess_eval.run(self.out_op)
+    # print(labels[0])
+    for i in range(3):
+      img = Image.fromarray(images[i], 'RGB')
+      out = Image.fromarray(outputs[i], 'RGB')
+      label = Image.fromarray(labels[i], 'RGB')
+      img.save('out_example/' + str(i) + 'image.jpg')
+      out.save('out_example/' + str(i) + 'output.jpg')
+      label.save('out_example/' + str(i) + 'label.jpg')
+
+    # for idx_iter in range(nb_iters):
+    #   _, lb = self.sess_eval.run(self.out_op)
+    #   for i in range(len(lb)):
+    #     img = Image.fromarray(lb[i], 'RGB')
+    #     img.save('out_example/' + str(idx_iter) + '-' + str(i) + 'raw.jpg')
+    tf.logging.info('time = %.4e' % (t / FLAGS.nb_smpls_eval))
 
   def __build(self, is_train):  # pylint: disable=too-many-locals
     """Build the training / evaluation graph.
@@ -160,6 +188,8 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
         self.saver_train = tf.train.Saver(self.vars)
       else:
         self.sess_eval = sess
+        self.time_op = [logits]
+        self.out_op = [tf.cast(images, tf.uint8), tf.cast(logits, tf.uint8), tf.cast(labels, tf.uint8)]
         self.eval_op = [loss] + list(metrics.values())
         self.eval_op_names = ['loss'] + list(metrics.keys())
         self.saver_eval = tf.train.Saver(self.vars)

@@ -186,8 +186,12 @@ def setup_lrn_rate_mobilenet_v2_ilsvrc12(global_step, batch_size):
   return lrn_rate, nb_batches
 
 def setup_lrn_rate_edsr_myDataset(global_step, batch_size):
-  nb_epochs = 20
-  idxs_epoch = [10, 15, 18]
+  # default
+  # nb_epochs = 20
+  # idxs_epoch = [10, 15, 18]
+
+  nb_epochs = 30
+  idxs_epoch = [15, 20, 25]
   decay_rates = [1.0, 0.1, 0.01, 0.001]
   lrn_rate = setup_lrn_rate_piecewise_constant(global_step, batch_size, idxs_epoch, decay_rates)
   nb_batches = calc_nb_batches(nb_epochs, batch_size)
