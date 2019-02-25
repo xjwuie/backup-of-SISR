@@ -31,7 +31,7 @@ from utils.multi_gpu_wrapper import MultiGpuWrapper as mgw
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('ws_save_path', './models_ws/model.ckpt', 'WS: model\'s save path')
-tf.app.flags.DEFINE_float('ws_prune_ratio', 0.75, 'WS: target pruning ratio')
+tf.app.flags.DEFINE_float('ws_prune_ratio', 0.5, 'WS: target pruning ratio')
 tf.app.flags.DEFINE_string('ws_prune_ratio_prtl', 'optimal',
                            'WS: pruning ratio protocol (\'uniform\' | \'heurist\' | \'optimal\')')
 tf.app.flags.DEFINE_integer('ws_nb_rlouts', 200, 'WS: # of roll-outs for the RL agent')

@@ -32,7 +32,7 @@ def resBlock(x, index, data_format, channels=256, kernel_size=[3, 3], scale=0.1)
 
 def upsample(x, scale=2, features=64, activation=None):
     assert scale in [2, 3, 4]
-    x = tf.layers.conv2d(x, features, [3, 3], padding='SAME')
+    # x = tf.layers.conv2d(x, features, [3, 3], padding='SAME')
     if scale == 2:
         ps_features = 3 * (scale ** 2)
         x = tf.layers.conv2d(x, ps_features, [3, 3], padding='SAME')
@@ -82,29 +82,27 @@ def log10(x):
 
 
 def forward_fn(inputs, data_format):
-    features = 32   # default 64
-    layer_num = 8  # default 16
-    scaling_factor = 0.1
+    features0 = 64
+    filter0 = 5
+    features1 = 32
+    filter1 = 3
+    filter3 = 3
+
     scale = 2
 
     inputs_mean = 127.0
     inputs = inputs - inputs_mean
-    inputs = tf.layers.conv2d(inputs, features, [3, 3], data_format=data_format, padding='SAME', name="conv0")
-    conv0 = inputs
+    conv0 = tf.layers.conv2d(inputs, features0, [filter0, filter0],
+                             data_format=data_format, padding='SAME', name="conv0")
+
+    conv1 = tf.layers.conv2d(conv0, features1, [filter1, filter1],
+                             data_format=data_format, padding='SAME', name="conv1")
+
+    outputs = upsample(conv1, scale, features1, None)
     # print(inputs.get_shape().as_list())
+    outputs = tf.clip_by_value(outputs + inputs_mean, 0.0, 255.0)
 
-    for i in range(layer_num):
-        inputs = resBlock(inputs, i, data_format, features, [3, 3], scaling_factor)
-        # print(inputs.get_shape().as_list())
-
-    inputs = tf.layers.conv2d(inputs, features, [3, 3], data_format=data_format, padding='SAME', name="conv-1")
-    inputs += conv0
-
-    inputs = upsample(inputs, scale, features, None)
-    # print(inputs.get_shape().as_list())
-    inputs = tf.clip_by_value(inputs + inputs_mean, 0.0, 255.0)
-
-    return inputs
+    return outputs
 
 
 class ModelHelper(AbstractModelHelper):
@@ -143,14 +141,12 @@ class ModelHelper(AbstractModelHelper):
         mse = tf.reduce_mean(tf.squared_difference(labels, outputs), axis=[1, 2, 3])
         # print("mse shape: ", mse.shape)
         # PSNR = tf.constant(255 ** 2, dtype=tf.float32, shape=mse.shape)
-        PSNR = tf.divide(255**2, mse)
+        PSNR = tf.divide(255 ** 2, mse)
 
         PSNR = tf.constant(10, dtype=tf.float32) * log10(PSNR)
         PSNR = tf.reduce_mean(PSNR)
         accuracy = PSNR
         metrics = {'PSNR': accuracy}
-        # print("the time is")
-        # print(time_useless)
 
         return loss, metrics
 
@@ -158,7 +154,7 @@ class ModelHelper(AbstractModelHelper):
     def model_name(self):
         """Model's name."""
 
-        return 'edsr'
+        return 'espcn'
 
     @property
     def dataset_name(self):

@@ -9,8 +9,8 @@ tf.app.flags.DEFINE_integer('nb_classes', 1, '# of classes')
 tf.app.flags.DEFINE_integer('nb_smpls_train', 6021, '# of samples for training')
 tf.app.flags.DEFINE_integer('nb_smpls_val', 1000, '# of samples for validation')
 tf.app.flags.DEFINE_integer('nb_smpls_eval', 1602, '# of samples for evaluation')
-tf.app.flags.DEFINE_integer('batch_size', 16, 'batch size per GPU for training')
-tf.app.flags.DEFINE_integer('batch_size_eval', 16, 'batch size for evaluation')
+tf.app.flags.DEFINE_integer('batch_size', 64, 'batch size per GPU for training')
+tf.app.flags.DEFINE_integer('batch_size_eval', 64, 'batch size for evaluation')
 
 COLOR_CHANNEL = 3
 image_size = 96

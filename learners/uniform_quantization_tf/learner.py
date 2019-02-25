@@ -20,6 +20,8 @@ import os
 from timeit import default_timer as timer
 import numpy as np
 import tensorflow as tf
+import time
+from PIL import Image
 
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
@@ -135,6 +137,23 @@ class UniformQuantTFLearner(AbstractLearner):  # pylint: disable=too-many-instan
       eval_rslts[idx_iter] = self.sess_eval.run(self.eval_op)
     for idx, name in enumerate(self.eval_op_names):
       tf.logging.info('%s = %.4e' % (name, np.mean(eval_rslts[:, idx])))
+
+    t = time.time()
+    for idx_iter in range(nb_iters):
+      _ = self.sess_eval.run(self.time_op)
+
+    t = time.time() - t
+    images, outputs, labels = self.sess_eval.run(self.out_op)
+    # print(labels[0])
+    for i in range(3):
+      img = Image.fromarray(images[i], 'RGB')
+      out = Image.fromarray(outputs[i], 'RGB')
+      label = Image.fromarray(labels[i], 'RGB')
+      img.save('out_example/' + str(i) + 'image.jpg')
+      out.save('out_example/' + str(i) + 'output.jpg')
+      label.save('out_example/' + str(i) + 'label.jpg')
+
+    tf.logging.info('time = %.4e' % (t / FLAGS.nb_smpls_eval))
 
   def __build_train(self):  # pylint: disable=too-many-locals,too-many-statements
     """Build the training graph."""
@@ -270,6 +289,8 @@ class UniformQuantTFLearner(AbstractLearner):  # pylint: disable=too-many-instan
           loss += self.helper_dst.calc_loss(logits, logits_dst)
 
         # TF operations for evaluation
+        self.time_op = [logits]
+        self.out_op = [tf.cast(images, tf.uint8), tf.cast(logits, tf.uint8), tf.cast(labels, tf.uint8)]
         self.eval_op = [loss] + list(metrics.values())
         self.eval_op_names = ['loss'] + list(metrics.keys())
         self.saver_quan_eval = tf.train.Saver(vars_quan['all'])

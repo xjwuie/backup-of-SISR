@@ -22,6 +22,8 @@ import math
 from timeit import default_timer as timer
 import numpy as np
 import tensorflow as tf
+import time
+from PIL import Image
 
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
@@ -34,7 +36,7 @@ tf.app.flags.DEFINE_string('dcp_save_path', './models_dcp/model.ckpt', 'DCP: mod
 tf.app.flags.DEFINE_string('dcp_save_path_eval', './models_dcp_eval/model.ckpt',
                            'DCP: model\'s save path for evaluation')
 tf.app.flags.DEFINE_float('dcp_prune_ratio', 0.5, 'DCP: target channel pruning ratio')
-tf.app.flags.DEFINE_integer('dcp_nb_stages', 3, 'DCP: # of channel pruning stages')
+tf.app.flags.DEFINE_integer('dcp_nb_stages', 1, 'DCP: # of channel pruning stages')
 tf.app.flags.DEFINE_float('dcp_lrn_rate_adam', 1e-3, 'DCP: Adam\'s learning rate')
 tf.app.flags.DEFINE_integer('dcp_nb_iters_block', 10000, 'DCP: # of iterations for block-wise FT')
 tf.app.flags.DEFINE_integer('dcp_nb_iters_layer', 500, 'DCP: # of iterations for layer-wise FT')
@@ -225,6 +227,27 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
     for idx, name in enumerate(self.eval_op_names):
       tf.logging.info('%s = %.4e' % (name, np.mean(eval_rslts[:, idx])))
 
+    t = time.time()
+    for idx_iter in range(nb_iters):
+      _ = self.sess_eval.run(self.time_op)
+    t = time.time() - t
+    images, outputs, labels = self.sess_eval.run(self.out_op)
+    # print(labels[0])
+    for i in range(3):
+      img = Image.fromarray(images[i], 'RGB')
+      out = Image.fromarray(outputs[i], 'RGB')
+      label = Image.fromarray(labels[i], 'RGB')
+      img.save('out_example/' + str(i) + 'image.jpg')
+      out.save('out_example/' + str(i) + 'output.jpg')
+      label.save('out_example/' + str(i) + 'label.jpg')
+
+    # for idx_iter in range(nb_iters):
+    #   _, lb = self.sess_eval.run(self.out_op)
+    #   for i in range(len(lb)):
+    #     img = Image.fromarray(lb[i], 'RGB')
+    #     img.save('out_example/' + str(idx_iter) + '-' + str(i) + 'raw.jpg')
+    tf.logging.info('time = %.4e' % (t / FLAGS.nb_smpls_eval))
+
   def __build_train(self):  # pylint: disable=too-many-locals,too-many-statements
     """Build the training graph."""
 
@@ -366,6 +389,8 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
         pr_maskable = calc_prune_ratio(vars_prnd['maskable'])
 
         # TF operations for evaluation
+        self.time_op = [logits]
+        self.out_op = [tf.cast(images, tf.uint8), tf.cast(logits, tf.uint8), tf.cast(labels, tf.uint8)]
         self.eval_op = [loss, pr_trainable, pr_maskable] + list(metrics.values())
         self.eval_op_names = ['loss', 'pr_trn', 'pr_msk'] + list(metrics.keys())
         self.saver_prnd_eval = tf.train.Saver(vars_prnd['all'])
@@ -402,7 +427,8 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
       idxs_layer_to_block += [int(idx_layer / nb_layers_per_block)]
       if (idx_layer + 1) % nb_layers_per_block == 0:
         x = core_ops_prnd[idx_layer].outputs[0]
-
+        if idx_layer < nb_layers - 2:
+          x += core_ops_full[0].outputs[0]
         # x = tf.layers.batch_normalization(x, axis=3, training=True)
         # x = tf.nn.relu(x)
         # x = tf.reduce_mean(x, axis=[1, 2])
@@ -412,8 +438,8 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
 
         # print(labels.get_shape().as_list())
         # print(x.get_shape().as_list())
-
-        x = upsample(x, 2, 128)
+        # if idx_layer + 1 != nb_layers:
+        x = upsample(x, 2)
         diff = tf.abs(labels - x)
         dis_losses += [tf.reduce_mean(diff)]
     tf.logging.info('layer-to-block mapping: {}'.format(idxs_layer_to_block))

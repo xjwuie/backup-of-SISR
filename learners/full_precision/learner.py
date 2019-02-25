@@ -94,13 +94,17 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
     """Restore a model from the latest checkpoint files and then evaluate it."""
 
     self.__restore_model(is_train=False)
-    nb_iters = int(np.ceil(float(FLAGS.nb_smpls_eval) / FLAGS.batch_size))
+    nb_iters = int(np.ceil(float(FLAGS.nb_smpls_eval) / FLAGS.batch_size_eval))
     eval_rslts = np.zeros((nb_iters, len(self.eval_op)))
+
+    # print("nb_iters: ", nb_iters)
 
     for idx_iter in range(nb_iters):
       eval_rslts[idx_iter] = self.sess_eval.run(self.eval_op)
 
-    # t_useless = np.sum(eval_rslts[:, -1])
+    # eval_psnr = sorted(eval_rslts[:, 1])
+    # for idx in range(nb_iters):
+    #   print(eval_psnr[idx])
 
     for idx, name in enumerate(self.eval_op_names):
       tf.logging.info('%s = %.4e' % (name, np.mean(eval_rslts[:, idx])))
@@ -112,7 +116,7 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
     t = time.time() - t
     images, outputs, labels = self.sess_eval.run(self.out_op)
     # print(labels[0])
-    for i in range(3):
+    for i in range(min(8, FLAGS.batch_size_eval)):
       img = Image.fromarray(images[i], 'RGB')
       out = Image.fromarray(outputs[i], 'RGB')
       label = Image.fromarray(labels[i], 'RGB')
