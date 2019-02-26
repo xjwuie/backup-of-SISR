@@ -124,12 +124,21 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
       out.save('out_example/' + str(i) + 'output.jpg')
       label.save('out_example/' + str(i) + 'label.jpg')
 
-    # for idx_iter in range(nb_iters):
-    #   _, lb = self.sess_eval.run(self.out_op)
-    #   for i in range(len(lb)):
-    #     img = Image.fromarray(lb[i], 'RGB')
-    #     img.save('out_example/' + str(idx_iter) + '-' + str(i) + 'raw.jpg')
     tf.logging.info('time = %.4e' % (t / FLAGS.nb_smpls_eval))
+    txt = open("log.txt", "a")
+    l = ["full"]
+
+    l += [self.model_name]
+    # for idx, name in enumerate(self.eval_op_names):
+    tmp = np.mean(eval_rslts[:, 1])
+    l += ["PSNR: " + str(tmp)]
+    l += ["eval_batch_size: " + str(FLAGS.batch_size_eval)]
+    l += ["time/pic: " + str(t / FLAGS.nb_smpls_eval)]
+
+    txt.write(str(l))
+    txt.write('\n')
+    txt.close()
+
 
   def __build(self, is_train):  # pylint: disable=too-many-locals
     """Build the training / evaluation graph.

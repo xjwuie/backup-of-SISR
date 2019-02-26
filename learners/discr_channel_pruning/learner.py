@@ -248,6 +248,21 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
     #     img.save('out_example/' + str(idx_iter) + '-' + str(i) + 'raw.jpg')
     tf.logging.info('time = %.4e' % (t / FLAGS.nb_smpls_eval))
 
+    txt = open("log.txt", "a")
+    l = ["dcp"]
+    l += ["ratio:" + str(FLAGS.dcp_prune_ratio)]
+
+    l += [self.model_name]
+    # for idx, name in enumerate(self.eval_op_names):
+    tmp = np.mean(eval_rslts[:, 1])
+    l += ["PSNR: " + str(tmp)]
+    l += ["eval_batch_size: " + str(FLAGS.batch_size_eval)]
+    l += ["time/pic: " + str(t / FLAGS.nb_smpls_eval)]
+
+    txt.write(str(l))
+    txt.write('\n')
+    txt.close()
+
   def __build_train(self):  # pylint: disable=too-many-locals,too-many-statements
     """Build the training graph."""
 
