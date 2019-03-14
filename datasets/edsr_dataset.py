@@ -1,21 +1,56 @@
 import os
 import tensorflow as tf
+import scipy.misc
+from PIL import Image
 
 from datasets.abstract_dataset import AbstractDataset
 
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_integer('nb_classes', 1, '# of classes')
-tf.app.flags.DEFINE_integer('nb_smpls_train', 6021, '# of samples for training')
+tf.app.flags.DEFINE_integer('nb_smpls_train', 235809, '# of samples for training 6021/235809')
 tf.app.flags.DEFINE_integer('nb_smpls_val', 1000, '# of samples for validation')
-tf.app.flags.DEFINE_integer('nb_smpls_eval', 1602, '# of samples for evaluation')
+tf.app.flags.DEFINE_integer('nb_smpls_eval', 30051, '# of samples for evaluation1602/30051')
 tf.app.flags.DEFINE_integer('batch_size', 64, 'batch size per GPU for training')
 tf.app.flags.DEFINE_integer('batch_size_eval', 64, 'batch size for evaluation')
+
+tf.app.flags.DEFINE_boolean('factory_mode', False, 'output an HR-image')
+tf.app.flags.DEFINE_string('image_name', '', 'image name')
 
 COLOR_CHANNEL = 3
 image_size = 96
 scale = 2
 image_low = 48
+
+def make_dataset():
+    output_test_dir = os.path.join(FLAGS.data_dir_local, 'images/test.tfrecords')
+    writer_test = tf.python_io.TFRecordWriter(output_test_dir)
+    tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/" + FLAGS.image_name)
+
+    global coordy
+    global coordx
+    x, y, z = tmp_image.shape
+    tmp_image = tmp_image[:, :, 0:3]
+    # print([x, y])
+    coordx = x // image_low
+    coordy = y // image_low
+    for i in range(coordx):
+
+        for j in range(coordy):
+            tmp = tmp_image[i * image_low: (i + 1) * image_low, j * image_low: (j + 1) * image_low]
+            tmp_high = scipy.misc.imresize(tmp, (image_size, image_size))
+            tmp = tmp.tobytes()
+            tmp_high = tmp_high.tobytes()
+
+            features = tf.train.Features(feature={
+                'image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tmp])),
+                'label': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tmp_high]))
+            })
+            example = tf.train.Example(features=features)
+
+            writer_test.write(example.SerializeToString())
+
+    writer_test.close()
 
 
 def parse_fn(example_serialized, is_train):
@@ -66,6 +101,8 @@ class EdsrDataset(AbstractDataset):
             self.batch_size = FLAGS.batch_size
         else:
             self.file_pattern = os.path.join(data_dir, 'test*')
+            if FLAGS.factory_mode:
+                self.file_pattern = os.path.join(data_dir, 'images/test.tfrecords')
             self.batch_size = FLAGS.batch_size_eval
         self.dataset_fn = tf.data.TFRecordDataset
         self.parse_fn = lambda x: parse_fn(x, is_train=is_train)

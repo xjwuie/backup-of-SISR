@@ -24,6 +24,7 @@ import numpy as np
 import tensorflow as tf
 import time
 from PIL import Image
+import scipy.misc
 
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
@@ -220,6 +221,36 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
     """Restore a model from the latest checkpoint files and then evaluate it."""
 
     self.__restore_model(is_train=False)
+
+    if FLAGS.factory_mode:
+      tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/images/" + FLAGS.image_name)
+      x, y, z = tmp_image.shape
+
+      size_low = 48
+      size_high = 96
+
+      coordx = x // size_low
+      coordy = y // size_low
+      nb_iters = int(np.ceil(float(coordy * coordx) / FLAGS.batch_size_eval))
+      outputs = []
+      image = np.zeros([size_high * coordx, size_high * coordy, 3], dtype=np.uint8)
+
+      for i in range(nb_iters):
+        output = self.sess_eval.run(self.factory_op)
+        outputs += output[:]
+
+      outputs = outputs[0]
+      index = 0
+      for i in range(coordx):
+        for j in range(coordy):
+          image[i*size_high: (i+1)*size_high, j*size_high: (j+1)*size_high, :] = np.array(outputs[index])
+          index += 1
+
+      out = Image.fromarray(image, 'RGB')
+      out.save('out_example/' + 'output.jpg')
+
+      return
+
     nb_iters = int(np.ceil(float(FLAGS.nb_smpls_eval) / FLAGS.batch_size_eval))
     eval_rslts = np.zeros((nb_iters, len(self.eval_op)))
     for idx_iter in range(nb_iters):
@@ -404,6 +435,7 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
         pr_maskable = calc_prune_ratio(vars_prnd['maskable'])
 
         # TF operations for evaluation
+        self.factory_op = [tf.cast(logits, tf.uint8)]
         self.time_op = [logits]
         self.out_op = [tf.cast(images, tf.uint8), tf.cast(logits, tf.uint8), tf.cast(labels, tf.uint8)]
         self.eval_op = [loss, pr_trainable, pr_maskable] + list(metrics.values())
@@ -437,13 +469,16 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
     dis_losses = []
     idxs_layer_to_block = []
     for idx_layer in range(nb_layers):
-      reg_losses += \
-        [tf.nn.l2_loss(core_ops_full[idx_layer].outputs[0] - core_ops_prnd[idx_layer].outputs[0])]
+      reg_losses += [tf.reduce_mean(tf.abs(core_ops_full[idx_layer].outputs[0]
+                                           - core_ops_prnd[idx_layer].outputs[0]))]
+        # [tf.nn.l2_loss(core_ops_full[idx_layer].outputs[0] - core_ops_prnd[idx_layer].outputs[0])]
+
       idxs_layer_to_block += [int(idx_layer / nb_layers_per_block)]
       if (idx_layer + 1) % nb_layers_per_block == 0:
         x = core_ops_prnd[idx_layer].outputs[0]
-        if idx_layer < nb_layers - 2:
-          x += core_ops_full[0].outputs[0]
+        if self.model_name == "edsr":
+          if idx_layer < nb_layers - 2:
+            x += core_ops_full[0].outputs[0]
         # x = tf.layers.batch_normalization(x, axis=3, training=True)
         # x = tf.nn.relu(x)
         # x = tf.reduce_mean(x, axis=[1, 2])
@@ -451,9 +486,6 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
         # print(x.get_shape().as_list())
         # dis_losses += [tf.losses.softmax_cross_entropy(labels, x)]
 
-        # print(labels.get_shape().as_list())
-        # print(x.get_shape().as_list())
-        # if idx_layer + 1 != nb_layers:
         x = upsample(x, 2)
         diff = tf.abs(labels - x)
         dis_losses += [tf.reduce_mean(diff)]

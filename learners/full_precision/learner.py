@@ -22,11 +22,14 @@ import numpy as np
 import tensorflow as tf
 import time
 from PIL import Image
+import scipy.misc
 
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
 from utils.lrn_rate_utils import setup_lrn_rate
 from utils.multi_gpu_wrapper import MultiGpuWrapper as mgw
+
+from datasets import edsr_dataset
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -94,6 +97,36 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
     """Restore a model from the latest checkpoint files and then evaluate it."""
 
     self.__restore_model(is_train=False)
+
+    if FLAGS.factory_mode:
+      tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/images/" + FLAGS.image_name)
+      x, y, z = tmp_image.shape
+
+      size_low = 48
+      size_high = 96
+
+      coordx = x // size_low
+      coordy = y // size_low
+      nb_iters = int(np.ceil(float(coordy * coordx) / FLAGS.batch_size_eval))
+      outputs = []
+      image = np.zeros([size_high * coordx, size_high * coordy, 3], dtype=np.uint8)
+
+      for i in range(nb_iters):
+        output = self.sess_eval.run(self.factory_op)
+        outputs += output[:]
+
+      outputs = outputs[0]
+      index = 0
+      for i in range(coordx):
+        for j in range(coordy):
+          image[i*size_high: (i+1)*size_high, j*size_high: (j+1)*size_high, :] = np.array(outputs[index])
+          index += 1
+
+      out = Image.fromarray(image, 'RGB')
+      out.save('out_example/' + 'output.jpg')
+
+      return
+
     nb_iters = int(np.ceil(float(FLAGS.nb_smpls_eval) / FLAGS.batch_size_eval))
     eval_rslts = np.zeros((nb_iters, len(self.eval_op)))
 
@@ -167,6 +200,7 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
       with tf.variable_scope(self.model_scope):
         # forward pass
         logits = self.forward_train(images) if is_train else self.forward_eval(images)
+        # out = self.forward_eval(images)
         tf.add_to_collection('logits_final', logits)
 
         # loss & extra evalution metrics
@@ -201,6 +235,8 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
         self.saver_train = tf.train.Saver(self.vars)
       else:
         self.sess_eval = sess
+
+        self.factory_op = [tf.cast(logits, tf.uint8)]
         self.time_op = [logits]
         self.out_op = [tf.cast(images, tf.uint8), tf.cast(logits, tf.uint8), tf.cast(labels, tf.uint8)]
         self.eval_op = [loss] + list(metrics.values())
