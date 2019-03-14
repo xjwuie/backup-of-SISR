@@ -101,7 +101,7 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
     if FLAGS.factory_mode:
       tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/images/" + FLAGS.image_name)
       x, y, z = tmp_image.shape
-
+      print(tmp_image.shape)
       size_low = 48
       size_high = 96
 
@@ -111,11 +111,16 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
       outputs = []
       image = np.zeros([size_high * coordx, size_high * coordy, 3], dtype=np.uint8)
 
+      print(image.shape)
+      print(nb_iters)
       for i in range(nb_iters):
-        output = self.sess_eval.run(self.factory_op)
-        outputs += output[:]
 
-      outputs = outputs[0]
+        output = self.sess_eval.run(self.factory_op)
+        for img in output[0]:
+          outputs.append(img)
+
+
+      print(np.array(outputs).shape)
       index = 0
       for i in range(coordx):
         for j in range(coordy):

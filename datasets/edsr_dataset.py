@@ -25,7 +25,7 @@ image_low = 48
 def make_dataset():
     output_test_dir = os.path.join(FLAGS.data_dir_local, 'images/test.tfrecords')
     writer_test = tf.python_io.TFRecordWriter(output_test_dir)
-    tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/" + FLAGS.image_name)
+    tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/images/" + FLAGS.image_name)
 
     global coordy
     global coordx
@@ -94,6 +94,9 @@ class EdsrDataset(AbstractDataset):
             data_dir = FLAGS.data_hdfs_host + FLAGS.data_dir_hdfs
         else:
             raise ValueError('unrecognized data disk: ' + FLAGS.data_disk)
+
+        if FLAGS.factory_mode:
+            make_dataset()
 
         # configure file patterns & function handlers
         if is_train:

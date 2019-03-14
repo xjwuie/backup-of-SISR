@@ -77,3 +77,7 @@
 ['full', 'espcn', 'PSNR: 35.71018161367863', 'eval_batch_size: 64', 'time/pic: 0.00015017592067159333']
 ['full', 'espcn', 'PSNR: 35.714329800707226', 'eval_batch_size: 64', 'time/pic: 0.00014724623069624818']
 ['full', 'espcn', 'PSNR: 35.70303855246686', 'eval_batch_size: 64', 'time/pic: 0.0001513730991319477']
+['full', 'espcn', 'PSNR: 35.70033219114263', 'eval_batch_size: 64', 'time/pic: 0.00015325141006220414']
+['full', 'espcn', 'PSNR: 35.70343360900879', 'eval_batch_size: 64', 'time/pic: 0.00014803759536268404']
+['full', 'espcn', 'PSNR: 35.707897336432275', 'eval_batch_size: 64', 'time/pic: 0.00014827269761400735']
+['full', 'espcn', 'PSNR: 35.71602383877369', 'eval_batch_size: 64', 'time/pic: 0.00012445740999506973']
