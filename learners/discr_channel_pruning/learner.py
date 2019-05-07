@@ -41,8 +41,10 @@ tf.app.flags.DEFINE_integer('dcp_nb_stages', 1, 'DCP: # of channel pruning stage
 tf.app.flags.DEFINE_float('dcp_lrn_rate_adam', 1e-3, 'DCP: Adam\'s learning rate')
 tf.app.flags.DEFINE_integer('dcp_nb_iters_block', 10000, 'DCP: # of iterations for block-wise FT')
 tf.app.flags.DEFINE_integer('dcp_nb_iters_layer', 500, 'DCP: # of iterations for layer-wise FT')
+tf.app.flags.DEFINE_string('dcp_output_scope', 'pruned_model', 'output name scope')
+tf.app.flags.DEFINE_string('dcp_input_scope', 'model', 'input name scope')
 
-image_low = 48
+
 def upsample(x, scale=2, features=64, activation=None):
   assert scale in [2, 3, 4]
   if scale == 2:
@@ -67,7 +69,7 @@ def upsample(x, scale=2, features=64, activation=None):
 def _phase_shift(I, r):
   bsize, a, b, c = I.get_shape().as_list()
   dims = I.get_shape().as_list()
-  a = b = image_low
+  a = b = FLAGS.input_size
   bsize = tf.shape(I)[0]  # Handling Dimension(None) type for undefined batch dim
   X = tf.reshape(I, shape=[-1, a, b, r, r])
   X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
@@ -125,7 +127,8 @@ def get_ops_by_scope_n_pattern(scope, pattern):
   ops = []
   for op in tf.get_default_graph().get_operations():
     if op.name.startswith(scope) and re.search(pattern, op.name) is not None:
-      ops += [op]
+      if not('gamma' in op.name):
+        ops += [op]
 
   return ops
 
@@ -160,8 +163,8 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
     super(DisChnPrunedLearner, self).__init__(sm_writer, model_helper)
 
     # define scopes for full & channel-pruned models
-    self.model_scope_full = 'model'
-    self.model_scope_prnd = 'pruned_model'
+    self.model_scope_full = FLAGS.dcp_input_scope
+    self.model_scope_prnd = FLAGS.dcp_output_scope
 
     # download the pre-trained model
     if self.is_primary_worker('local'):
@@ -226,8 +229,8 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
       tmp_image = scipy.misc.imread(FLAGS.data_dir_local + "/images/" + FLAGS.image_name)
       x, y, z = tmp_image.shape
 
-      size_low = 48
-      size_high = 96
+      size_low = FLAGS.input_size
+      size_high = size_low * FLAGS.sr_scale
 
       coordx = x // size_low
       coordy = y // size_low
@@ -264,10 +267,17 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
     t = time.time() - t
     images, outputs, labels = self.sess_eval.run(self.out_op)
     # print(labels[0])
-    for i in range(3):
+    output_size = FLAGS.sr_scale * FLAGS.input_size
+    for i in range(min(8, FLAGS.batch_size_eval)):
+      img_bic = scipy.misc.imresize(images[i], (output_size, output_size), 'bicubic')
+      img_bic = np.clip(img_bic, 0, 255)
+      img_bic = np.array(img_bic, np.uint8)
+
+      img_bic = Image.fromarray(img_bic, 'RGB')
       img = Image.fromarray(images[i], 'RGB')
       out = Image.fromarray(outputs[i], 'RGB')
       label = Image.fromarray(labels[i], 'RGB')
+      img_bic.save(('out_example/' + str(i) + 'bic.jpg'))
       img.save('out_example/' + str(i) + 'image.jpg')
       out.save('out_example/' + str(i) + 'output.jpg')
       label.save('out_example/' + str(i) + 'label.jpg')
@@ -285,8 +295,11 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
 
     l += [self.model_name]
     # for idx, name in enumerate(self.eval_op_names):
-    tmp = np.mean(eval_rslts[:, 1])
-    l += ["PSNR: " + str(tmp)]
+    # tmp = np.mean(eval_rslts[:, 3])
+    # l += ["PSNR: " + str(tmp)]
+    for idx, name in enumerate(self.eval_op_names):
+      tmp = np.mean(eval_rslts[:, idx])
+      l += [name + ": " + str(tmp)]
     l += ["eval_batch_size: " + str(FLAGS.batch_size_eval)]
     l += ["time/pic: " + str(t / FLAGS.nb_smpls_eval)]
 
@@ -476,9 +489,9 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
       idxs_layer_to_block += [int(idx_layer / nb_layers_per_block)]
       if (idx_layer + 1) % nb_layers_per_block == 0:
         x = core_ops_prnd[idx_layer].outputs[0]
-        if self.model_name == "edsr":
-          if idx_layer < nb_layers - 2:
-            x += core_ops_full[0].outputs[0]
+        # if self.model_name == "edsr":
+        #   if idx_layer < nb_layers - 2:
+        #     x += core_ops_full[0].outputs[0]
         # x = tf.layers.batch_normalization(x, axis=3, training=True)
         # x = tf.nn.relu(x)
         # x = tf.reduce_mean(x, axis=[1, 2])
@@ -486,7 +499,9 @@ class DisChnPrunedLearner(AbstractLearner):  # pylint: disable=too-many-instance
         # print(x.get_shape().as_list())
         # dis_losses += [tf.losses.softmax_cross_entropy(labels, x)]
 
-        x = upsample(x, 2)
+        x = upsample(x, FLAGS.sr_scale)
+        if self.model_name == 'mycnn':
+          x = tf.layers.conv2d(x, 3, [1, 1], data_format='channels_last', padding='SAME')
         diff = tf.abs(labels - x)
         dis_losses += [tf.reduce_mean(diff)]
     tf.logging.info('layer-to-block mapping: {}'.format(idxs_layer_to_block))

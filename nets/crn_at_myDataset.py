@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import time
-import scipy.misc
 from PIL import Image
 import os
 
@@ -10,14 +9,46 @@ from datasets.edsr_dataset import EdsrDataset
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_float('lrn_rate_init', 0.000001, 'initial learning rate  l1=0.0002')
+tf.app.flags.DEFINE_float('lrn_rate_init', 0.0002, 'initial learning rate')
 tf.app.flags.DEFINE_float('batch_size_norm', 128, 'normalization factor of batch size')
 tf.app.flags.DEFINE_float('momentum', 0.9, 'momentum coefficient')
-tf.app.flags.DEFINE_float('loss_w_dcy', 5e-1, 'weight decaying loss\'s coefficient')
+tf.app.flags.DEFINE_float('loss_w_dcy', 5e-6, 'weight decaying loss\'s coefficient')
 
-image_size = 96
-sr_scale = 2
 image_low = 48
+
+
+def resBlock(x, data_format, channels=256, kernel_size=[3, 3]):
+    tmp = tf.layers.conv2d(x, channels, kernel_size,
+                           data_format=data_format, padding='SAME')
+    tmp = tf.nn.relu(tmp)
+    tmp = tf.layers.conv2d(tmp, channels, kernel_size,
+                           data_format=data_format, padding='SAME')
+    tmp = tf.nn.relu(tmp + x)
+    return tmp
+
+
+def basicBlock(x, data_format, channels):
+    tmp = tf.layers.conv2d(x, channels, [1, 1], padding='SAME', data_format=data_format)
+    tmp = tf.nn.relu(tmp)
+    return tmp
+
+
+def block(x, data_format, channels):
+    c0 = o0 = x
+
+    b1 = resBlock(o0, data_format, channels, [3, 3])
+    c1 = tf.concat([c0, b1], 3)
+    o1 = basicBlock(c1, data_format, channels)
+
+    b2 = resBlock(o1, data_format, channels, [3, 3])
+    c2 = tf.concat([c1, b2], 3)
+    o2 = basicBlock(c2, data_format, channels)
+
+    b3 = resBlock(o2, data_format, channels, [3, 3])
+    c3 = tf.concat([c2, b3], 3)
+    o3 = basicBlock(c3, data_format, channels)
+
+    return o3
 
 
 def upsample(x, scale=2, features=64, activation=None):
@@ -73,32 +104,31 @@ def log10(x):
 
 def forward_fn(inputs, data_format):
     features0 = 64
-    filter0 = 5
-    features1 = 32
-    filter1 = 3
-    filter3 = 3
 
-    scale = sr_scale
+    scale = 2
 
     inputs_mean = 127.0
-    inputs_max = 255.0
-    inputs = inputs
-    # inputs = inputs - inputs_mean
-    inputs = inputs / inputs_max
-    conv0 = tf.layers.conv2d(inputs, features0, [filter0, filter0],
-                             data_format=data_format, padding='SAME', name="conv0",
-                             activation=tf.nn.tanh)
+    inputs = inputs - inputs_mean
+    conv0 = tf.layers.conv2d(inputs, features0, [3, 3],
+                             data_format=data_format, padding='SAME')
+    c0 = o0 = conv0
 
-    conv1 = tf.layers.conv2d(conv0, features1, [filter1, filter1],
-                             data_format=data_format, padding='SAME', name="conv1",
-                             activation=tf.nn.tanh)
+    b1 = block(o0, data_format, features0)
+    c1 = tf.concat([c0, b1], 3)
+    o1 = basicBlock(c1, data_format, features0)
 
-    outputs = upsample(conv1, scale, features1, None)
-    # outputs = tf.nn.sigmoid(outputs)
-    # print(inputs.get_shape().as_list())
-    outputs = outputs * inputs_max
-    # outputs = outputs + inputs_mean
-    # outputs = tf.clip_by_value(outputs, 0.0, 255.0)
+    b2 = block(o1, data_format, features0)
+    c2 = tf.concat([c1, b2], 3)
+    o2 = basicBlock(c2, data_format, features0)
+
+    b3 = block(o2, data_format, features0)
+    c3 = tf.concat([c2, b3], 3)
+    o3 = basicBlock(c3, data_format, features0)
+
+    outputs = upsample(o3, 2, features0)
+    outputs = tf.layers.conv2d(outputs, 3, [3, 3], padding='SAME', data_format=data_format)
+
+    outputs = tf.clip_by_value(outputs + inputs_mean, 0.0, 255.0)
 
     return outputs
 
@@ -133,42 +163,18 @@ class ModelHelper(AbstractModelHelper):
         # outputs = outputs - tf.reduce_mean(outputs)
         # labels = labels - tf.reduce_mean(labels)
         # outputs = outputs - tf.reduce_mean(outputs)
-        # loss = tf.reduce_mean(tf.losses.absolute_difference(labels, outputs))
-        loss = tf.reduce_mean(tf.squared_difference(labels, outputs))
+        loss = tf.reduce_mean(tf.losses.absolute_difference(labels, outputs))
         loss += FLAGS.loss_w_dcy * tf.add_n([tf.nn.l2_loss(var) for var in trainable_vars])
 
-        labels_y = labels[:, :, 0] * 0.229 + labels[:, :, 1] * 0.587 + labels[:, :, 2] * 0.114
-        outputs_y = outputs[:, :, 0] * 0.229 + outputs[:, :, 1] * 0.587 + outputs[:, :, 2] * 0.114
-        mse_y = tf.reduce_mean(tf.squared_difference(labels_y, outputs_y))
         mse = tf.reduce_mean(tf.squared_difference(labels, outputs), axis=[1, 2, 3])
-        MSE = tf.reduce_mean(mse)
         # print("mse shape: ", mse.shape)
         # PSNR = tf.constant(255 ** 2, dtype=tf.float32, shape=mse.shape)
-        PSNR = tf.divide(255.0 ** 2, MSE)
-        PSNR_Y = tf.divide(255.0 ** 2, mse_y)
+        PSNR = tf.divide(255 ** 2, mse)
 
         PSNR = tf.constant(10, dtype=tf.float32) * log10(PSNR)
-        PSNR_Y = tf.constant(10, dtype=tf.float32) * log10(PSNR_Y)
-
-        SSIM = tf.image.ssim(outputs, labels, 255)
-        SSIM = tf.reduce_mean(SSIM)
-
-        # accuracy = PSNR
-        # bilinear = labels
-        # bilinear = tf.image.resize_bilinear(bilinear, (48, 48))
-        # # print(bilinear.shape)
-        # # print(bilinear.dtype)
-        # bilinear = tf.image.resize_bilinear(bilinear, (96, 96))
-        # bicubic = tf.image.resize_bicubic(bilinear, (96, 96))
-        # # print(bilinear.shape)
-        # # print(bilinear.dtype)
-        # mse_bilinear = tf.reduce_mean(tf.squared_difference(bilinear, labels), axis=[1, 2, 3])
-        # PSNR_bilinear = mse_bilinear + 1.0
-        # PSNR_bilinear = tf.divide(255 ** 2, PSNR_bilinear)
-        # PSNR_bilinear = tf.constant(10, dtype=tf.float32) * log10(PSNR_bilinear)
-        # PSNR_bilinear = tf.reduce_mean(PSNR_bilinear)
-
-        metrics = {'PSNR': PSNR, 'PSNR_Y': PSNR_Y, 'MSE': MSE, 'SSIM': SSIM}
+        PSNR = tf.reduce_mean(PSNR)
+        accuracy = PSNR
+        metrics = {'PSNR': accuracy}
 
         return loss, metrics
 
@@ -176,7 +182,7 @@ class ModelHelper(AbstractModelHelper):
     def model_name(self):
         """Model's name."""
 
-        return 'espcn'
+        return 'crn'
 
     @property
     def dataset_name(self):

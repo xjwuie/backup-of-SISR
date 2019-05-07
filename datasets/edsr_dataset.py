@@ -8,14 +8,16 @@ from datasets.abstract_dataset import AbstractDataset
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_integer('nb_classes', 1, '# of classes')
-tf.app.flags.DEFINE_integer('nb_smpls_train', 235809, '# of samples for training 6021/235809')
+tf.app.flags.DEFINE_integer('nb_smpls_train', 235809, '# of samples for training 235809')
 tf.app.flags.DEFINE_integer('nb_smpls_val', 1000, '# of samples for validation')
-tf.app.flags.DEFINE_integer('nb_smpls_eval', 30051, '# of samples for evaluation1602/30051')
-tf.app.flags.DEFINE_integer('batch_size', 64, 'batch size per GPU for training')
+tf.app.flags.DEFINE_integer('nb_smpls_eval', 30051, '# of samples for evaluation 30051')
+tf.app.flags.DEFINE_integer('batch_size', 16, 'batch size per GPU for training')
 tf.app.flags.DEFINE_integer('batch_size_eval', 64, 'batch size for evaluation')
 
 tf.app.flags.DEFINE_boolean('factory_mode', False, 'output an HR-image')
 tf.app.flags.DEFINE_string('image_name', '', 'image name')
+tf.app.flags.DEFINE_integer('input_size', 48, 'input patch size')
+tf.app.flags.DEFINE_integer('sr_scale', 2, 'super resolution scale')
 
 COLOR_CHANNEL = 3
 image_size = 96
@@ -31,6 +33,7 @@ def make_dataset():
     global coordx
     x, y, z = tmp_image.shape
     tmp_image = tmp_image[:, :, 0:3]
+
     # print([x, y])
     coordx = x // image_low
     coordy = y // image_low

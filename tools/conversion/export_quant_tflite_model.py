@@ -23,6 +23,7 @@ import subprocess
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib import graph_editor
+import time
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -88,6 +89,8 @@ def convert_pb_model_to_tflite(net, file_path_pb, file_path_tflite, enbl_quant):
     arg_list += [
       '--inference_type QUANTIZED_UINT8',
       '--mean_values 128',
+      '--default_ranges_min 0',
+      '--default_ranges_max 255',
       '--std_dev_values 127']
     if FLAGS.enbl_post_quant:
       arg_list += [
@@ -120,8 +123,14 @@ def test_pb_model(file_path, net_input_name, net_output_name, net_input_data):
     net_input = graph.get_tensor_by_name('import/' + net_input_name + ':0')
     net_output = graph.get_tensor_by_name('import/' + net_output_name + ':0')
     tf.logging.info('input: {} / output: {}'.format(net_input.name, net_output.name))
-    net_output_data = sess.run(net_output, feed_dict={net_input: net_input_data})
+    for i in range(200):
+      if i >= 100:
+        time_begin = time.time()
+        net_output_data = sess.run(net_output, feed_dict={net_input: net_input_data})
+    time_cost = time.time() - time_begin
+
     tf.logging.info('outputs from the *.pb model: {}'.format(net_output_data))
+    tf.logging.info('time from the *.pb model: {}ms'.format(time_cost * 5))
 
 def test_tflite_model(file_path, net_input_data):
   """Test the *.tflite model.
@@ -142,10 +151,15 @@ def test_tflite_model(file_path, net_input_data):
   tf.logging.info('output details: {}'.format(output_details))
 
   # test the model with given inputs
-  interpreter.set_tensor(input_details[0]['index'], net_input_data)
-  interpreter.invoke()
-  net_output_data = interpreter.get_tensor(output_details[0]['index'])
+  for i in range(200):
+    if i >= 100:
+      time_begin = time.time()
+    interpreter.set_tensor(input_details[0]['index'], net_input_data)
+    interpreter.invoke()
+    net_output_data = interpreter.get_tensor(output_details[0]['index'])
+  time_cost = time.time() - time_begin
   tf.logging.info('outputs from the *.tflite model: {}'.format(net_output_data))
+  tf.logging.info('time from the *.tflite model: {}ms'.format(time_cost * 5))
 
 def is_initialized(sess, var):
   """Check whether a variable is initialized.
@@ -247,6 +261,8 @@ def main(unused_argv):
     # network configurations
     file_path_meta = get_file_path_meta()
     input_name, input_shape = get_input_name_n_shape(file_path_meta)
+    print(input_name)
+    print(input_shape)
     net = {
       'input_name_ckpt': input_name,  # used to import the model from checkpoint files
       'input_name': 'net_input',  # used to export the model to *.pb & *.tflite files

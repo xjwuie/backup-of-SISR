@@ -160,8 +160,11 @@ class UniformQuantTFLearner(AbstractLearner):  # pylint: disable=too-many-instan
 
     l += [self.model_name]
     # for idx, name in enumerate(self.eval_op_names):
-    tmp = np.mean(eval_rslts[:, 1])
-    l += ["PSNR: " + str(tmp)]
+    # tmp = np.mean(eval_rslts[:, 1])
+    # l += ["PSNR: " + str(tmp)]
+    for idx, name in enumerate(self.eval_op_names):
+      tmp = np.mean(eval_rslts[:, idx])
+      l += [name + ": " + str(tmp)]
     l += ["eval_batch_size: " + str(FLAGS.batch_size_eval)]
     l += ["time/pic: " + str(t / FLAGS.nb_smpls_eval)]
 

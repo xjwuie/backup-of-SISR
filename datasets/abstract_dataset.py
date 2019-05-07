@@ -104,6 +104,7 @@ class AbstractDataset(ABC):
     """
     if not FLAGS.factory_mode:
       dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=FLAGS.buffer_size))
+      # dataset = dataset.repeat()
     dataset = dataset.batch(self.batch_size)
     dataset = dataset.prefetch(FLAGS.prefetch_size)
     iterator = dataset.make_one_shot_iterator()

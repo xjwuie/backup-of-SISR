@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import time
-import scipy.misc
 from PIL import Image
 import os
 
@@ -10,14 +9,10 @@ from datasets.edsr_dataset import EdsrDataset
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_float('lrn_rate_init', 0.000001, 'initial learning rate  l1=0.0002')
+tf.app.flags.DEFINE_float('lrn_rate_init', 0.0002, 'initial learning rate  l1=0.0002')
 tf.app.flags.DEFINE_float('batch_size_norm', 128, 'normalization factor of batch size')
 tf.app.flags.DEFINE_float('momentum', 0.9, 'momentum coefficient')
-tf.app.flags.DEFINE_float('loss_w_dcy', 5e-1, 'weight decaying loss\'s coefficient')
-
-image_size = 96
-sr_scale = 2
-image_low = 48
+tf.app.flags.DEFINE_float('loss_w_dcy', 5e-6, 'weight decaying loss\'s coefficient')
 
 
 def upsample(x, scale=2, features=64, activation=None):
@@ -45,7 +40,7 @@ def upsample(x, scale=2, features=64, activation=None):
 def _phase_shift(I, r):
     bsize, a, b, c = I.get_shape().as_list()
     dims = I.get_shape().as_list()
-    a = b = image_low
+    a = b = FLAGS.input_size
     bsize = tf.shape(I)[0]  # Handling Dimension(None) type for undefined batch dim
     X = tf.reshape(I, shape=[-1, a, b, r, r])
     X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
@@ -71,36 +66,67 @@ def log10(x):
     return numerator / denominator
 
 
-def forward_fn(inputs, data_format):
-    features0 = 64
-    filter0 = 5
-    features1 = 32
-    filter1 = 3
-    filter3 = 3
+def prelu(x, i):
+    alphas = tf.get_variable('alpha{}'.format(i), x.get_shape()[-1],
+                             initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    pos = tf.nn.relu(x)
+    neg = alphas * (x - abs(x)) * 0.5
+    # neg = tf.nn.relu(-x)
+    # neg = alphas * (-neg)
 
-    scale = sr_scale
+    return pos + neg
+
+
+def conv(x, index, data_format, channels, kernel_size=[3, 3]):
+    x = tf.layers.conv2d(x, channels, kernel_size, data_format=data_format,
+                         padding='SAME', name='conv'+str(index))
+    # x = prelu(x, index)
+    # x = tf.nn.relu(x)
+
+    return x
+
+
+def forward_fn(inputs, data_format):
+    d = 64
+    s = 16
+    m = 4
+    scale = FLAGS.sr_scale
 
     inputs_mean = 127.0
     inputs_max = 255.0
-    inputs = inputs
     # inputs = inputs - inputs_mean
     inputs = inputs / inputs_max
-    conv0 = tf.layers.conv2d(inputs, features0, [filter0, filter0],
-                             data_format=data_format, padding='SAME', name="conv0",
-                             activation=tf.nn.tanh)
 
-    conv1 = tf.layers.conv2d(conv0, features1, [filter1, filter1],
-                             data_format=data_format, padding='SAME', name="conv1",
-                             activation=tf.nn.tanh)
+    inputs = tf.layers.conv2d(inputs, 3, [1, 1], data_format=data_format, padding='SAME', name='gamma0')
 
-    outputs = upsample(conv1, scale, features1, None)
-    # outputs = tf.nn.sigmoid(outputs)
-    # print(inputs.get_shape().as_list())
-    outputs = outputs * inputs_max
-    # outputs = outputs + inputs_mean
-    # outputs = tf.clip_by_value(outputs, 0.0, 255.0)
+    inputs = tf.layers.conv2d(inputs, d, [5, 5], data_format=data_format, padding='SAME', name='conv0')
+    inputs = prelu(inputs, 0)
+    # inputs = tf.nn.relu(inputs)
 
-    return outputs
+    inputs = tf.layers.conv2d(inputs, s, [1, 1], data_format=data_format, padding='SAME', name='conv1')
+    inputs = prelu(inputs, 1)
+    # inputs = tf.nn.relu(inputs)
+
+    for i in range(2, 2+m):
+        inputs = conv(inputs, i, data_format, s, [3, 3])
+        # inputs = tf.nn.relu(inputs)
+        inputs = prelu(inputs, i)
+
+    inputs = tf.layers.conv2d(inputs, d, [1, 1], data_format=data_format, padding='SAME', name='conv'+str(2+m))
+    inputs = prelu(inputs, 2+m)
+    # inputs = tf.nn.relu(inputs)
+    # inputs = tf.nn.conv2d_transpose(inputs, [3, 3, 3, d],
+    #                                 [inputs.get_shape()[0], HR_size, HR_size, 3],
+    #                                 strides=[1, 2, 2, 1],
+    #                                 data_format=data_format)
+    inputs = tf.layers.conv2d_transpose(inputs, 3, [9, 9], (scale, scale),
+                                        padding='SAME', data_format=data_format)
+
+    inputs = tf.layers.conv2d(inputs, 3, [1, 1], data_format=data_format, padding='SAME', name='gamma1')
+
+    inputs = inputs * inputs_max
+    # inputs = tf.clip_by_value(inputs, 0.0, 255.0)
+    return inputs
 
 
 class ModelHelper(AbstractModelHelper):
@@ -133,12 +159,12 @@ class ModelHelper(AbstractModelHelper):
         # outputs = outputs - tf.reduce_mean(outputs)
         # labels = labels - tf.reduce_mean(labels)
         # outputs = outputs - tf.reduce_mean(outputs)
-        # loss = tf.reduce_mean(tf.losses.absolute_difference(labels, outputs))
-        loss = tf.reduce_mean(tf.squared_difference(labels, outputs))
+        loss = tf.reduce_mean(tf.losses.absolute_difference(labels, outputs))
+        # loss = tf.reduce_mean(tf.nn.l2_loss(labels - outputs))
         loss += FLAGS.loss_w_dcy * tf.add_n([tf.nn.l2_loss(var) for var in trainable_vars])
 
-        labels_y = labels[:, :, 0] * 0.229 + labels[:, :, 1] * 0.587 + labels[:, :, 2] * 0.114
-        outputs_y = outputs[:, :, 0] * 0.229 + outputs[:, :, 1] * 0.587 + outputs[:, :, 2] * 0.114
+        labels_y = labels[:, :, 0] * 0.299 + labels[:, :, 1] * 0.587 + labels[:, :, 2] * 0.114
+        outputs_y = outputs[:, :, 0] * 0.299 + outputs[:, :, 1] * 0.587 + outputs[:, :, 2] * 0.114
         mse_y = tf.reduce_mean(tf.squared_difference(labels_y, outputs_y))
         mse = tf.reduce_mean(tf.squared_difference(labels, outputs), axis=[1, 2, 3])
         MSE = tf.reduce_mean(mse)
@@ -150,23 +176,10 @@ class ModelHelper(AbstractModelHelper):
         PSNR = tf.constant(10, dtype=tf.float32) * log10(PSNR)
         PSNR_Y = tf.constant(10, dtype=tf.float32) * log10(PSNR_Y)
 
+        # PSNR = tf.reduce_mean(PSNR)
+
         SSIM = tf.image.ssim(outputs, labels, 255)
         SSIM = tf.reduce_mean(SSIM)
-
-        # accuracy = PSNR
-        # bilinear = labels
-        # bilinear = tf.image.resize_bilinear(bilinear, (48, 48))
-        # # print(bilinear.shape)
-        # # print(bilinear.dtype)
-        # bilinear = tf.image.resize_bilinear(bilinear, (96, 96))
-        # bicubic = tf.image.resize_bicubic(bilinear, (96, 96))
-        # # print(bilinear.shape)
-        # # print(bilinear.dtype)
-        # mse_bilinear = tf.reduce_mean(tf.squared_difference(bilinear, labels), axis=[1, 2, 3])
-        # PSNR_bilinear = mse_bilinear + 1.0
-        # PSNR_bilinear = tf.divide(255 ** 2, PSNR_bilinear)
-        # PSNR_bilinear = tf.constant(10, dtype=tf.float32) * log10(PSNR_bilinear)
-        # PSNR_bilinear = tf.reduce_mean(PSNR_bilinear)
 
         metrics = {'PSNR': PSNR, 'PSNR_Y': PSNR_Y, 'MSE': MSE, 'SSIM': SSIM}
 
@@ -176,7 +189,7 @@ class ModelHelper(AbstractModelHelper):
     def model_name(self):
         """Model's name."""
 
-        return 'espcn'
+        return 'mycnn'
 
     @property
     def dataset_name(self):

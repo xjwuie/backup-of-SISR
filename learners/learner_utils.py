@@ -26,6 +26,7 @@ from learners.uniform_quantization.learner import UniformQuantLearner
 from learners.uniform_quantization_tf.learner import UniformQuantTFLearner
 from learners.nonuniform_quantization.learner import NonUniformQuantLearner
 from learners.channel_pruning_gpu.learner import ChannelPrunedGpuLearner
+from learners.channel_pruning_rmt.learner import ChannelPrunedRmtLearner
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -57,6 +58,8 @@ def create_learner(sm_writer, model_helper):
     learner = NonUniformQuantLearner(sm_writer, model_helper)
   elif FLAGS.learner == 'channel-gpu':
     learner = ChannelPrunedGpuLearner(sm_writer, model_helper)
+  elif FLAGS.learner == 'chn-pruned-rmt':
+    learner = ChannelPrunedRmtLearner(sm_writer, model_helper)
   else:
     raise ValueError('unrecognized learner\'s name: ' + FLAGS.learner)
 

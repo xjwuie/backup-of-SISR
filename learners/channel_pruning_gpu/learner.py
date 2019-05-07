@@ -26,6 +26,7 @@ import tensorflow as tf
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
 from utils.multi_gpu_wrapper import MultiGpuWrapper as mgw
+from utils.lrn_rate_utils import setup_lrn_rate
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -46,6 +47,8 @@ tf.app.flags.DEFINE_float('cpg_lrn_rate_pgd_decr', 0.7,
                           'CPG: proximal gradient descent\'s learning rate\'s decrease ratio')
 tf.app.flags.DEFINE_float('cpg_lrn_rate_adam', 1e-2, 'CPG: Adam\'s initial learning rate')
 tf.app.flags.DEFINE_integer('cpg_nb_iters_layer', 1000, 'CPG: # of iterations for layer-wise FT')
+tf.app.flags.DEFINE_string('cpg_output_scope', 'pruned_model', 'output name scope')
+tf.app.flags.DEFINE_string('cpg_input_scope', 'model', 'input name scope')
 
 def get_vars_by_scope(scope):
   """Get list of variables within certain name scope.
@@ -113,8 +116,8 @@ class ChannelPrunedGpuLearner(AbstractLearner):  # pylint: disable=too-many-inst
     super(ChannelPrunedGpuLearner, self).__init__(sm_writer, model_helper)
 
     # define scopes for full & channel-pruned models
-    self.model_scope_full = 'model'
-    self.model_scope_prnd = 'pruned_model'
+    self.model_scope_full = FLAGS.cpg_input_scope
+    self.model_scope_prnd = FLAGS.cpg_output_scope
 
     # download the pre-trained model
     if self.is_primary_worker('local'):
@@ -227,7 +230,9 @@ class ChannelPrunedGpuLearner(AbstractLearner):  # pylint: disable=too-many-inst
 
         # learning rate schedule
         self.global_step = tf.train.get_or_create_global_step()
-        lrn_rate, self.nb_iters_train = self.setup_lrn_rate(self.global_step)
+        # lrn_rate, self.nb_iters_train = self.setup_lrn_rate(self.global_step)
+        lrn_rate, self.nb_iters_train = setup_lrn_rate(
+          self.global_step, self.model_name, self.dataset_name)
 
         # overall pruning ratios of trainable & maskable variables
         pr_trainable = calc_prune_ratio(self.vars_prnd['trainable'])

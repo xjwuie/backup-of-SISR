@@ -20,6 +20,7 @@ import os
 from timeit import default_timer as timer
 import numpy as np
 import tensorflow as tf
+import time
 
 from learners.abstract_learner import AbstractLearner
 from learners.distillation_helper import DistillationHelper
@@ -150,6 +151,27 @@ class WeightSparseLearner(AbstractLearner):  # pylint: disable=too-many-instance
     for idx, name in enumerate(self.eval_op_names):
       tf.logging.info('%s = %.4e' % (name, np.mean(eval_rslts[:, idx])))
 
+    t = time.time()
+    for idx_iter in range(nb_iters):
+      _ = self.sess_eval.run(self.time_op)
+    t = time.time() - t
+    tf.logging.info('time = %.4e' % (t / FLAGS.nb_smpls_eval))
+
+    txt = open("log.txt", "a")
+    l = ["ws"]
+    l += ["ratio:" + str(FLAGS.ws_prune_ratio)]
+    l += ["mode: " + str(FLAGS.ws_prune_ratio_prtl)]
+    l += [self.model_name]
+    for idx, name in enumerate(self.eval_op_names):
+      tmp = np.mean(eval_rslts[:, idx])
+      l += [name + ": " + str(tmp)]
+    l += ["eval_batch_size: " + str(FLAGS.batch_size_eval)]
+    l += ["time/pic: " + str(t / FLAGS.nb_smpls_eval)]
+
+    txt.write(str(l))
+    txt.write('\n')
+    txt.close()
+
   def __build_train(self):  # pylint: disable=too-many-locals
     """Build the training graph."""
 
@@ -253,6 +275,7 @@ class WeightSparseLearner(AbstractLearner):  # pylint: disable=too-many-instance
         pr_maskable = calc_prune_ratio(self.maskable_vars)
 
         # TF operations for evaluation
+        self.time_op = [logits]
         self.eval_op = [loss, pr_trainable, pr_maskable] + list(metrics.values())
         self.eval_op_names = ['loss', 'pr_trn', 'pr_msk'] + list(metrics.keys())
         self.saver_eval = tf.train.Saver(self.vars)

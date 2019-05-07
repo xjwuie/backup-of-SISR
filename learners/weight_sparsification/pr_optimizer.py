@@ -510,7 +510,7 @@ class PROptimizer(object):  # pylint: disable=too-many-instance-attributes
     # evaluate the network before re-training
     if is_primary_worker('global'):
       loss_pre, metrics_pre = self.__calc_loss_n_metrics()
-      assert 'accuracy' in metrics_pre or 'acc_top5' in metrics_pre, \
+      assert 'PSNR' in metrics_pre or 'acc_top5' in metrics_pre, \
         'either <accuracy> or <acc_top5> must be evaluated and returned'
 
     # re-train the network with layerwise regression & network fine-tuning
@@ -519,15 +519,15 @@ class PROptimizer(object):  # pylint: disable=too-many-instance-attributes
     # evaluate the network after re-training
     if is_primary_worker('global'):
       loss_post, metrics_post = self.__calc_loss_n_metrics()
-      assert 'accuracy' in metrics_post or 'acc_top5' in metrics_post, \
+      assert 'PSNR' in metrics_post or 'acc_top5' in metrics_post, \
           'either <accuracy> or <acc_top5> must be evaluated and returned'
 
     # evaluate the weight sparsified network
     reward = None
     if is_primary_worker('global'):
-      if 'accuracy' in metrics_post:
-        reward_pre = self.rl_helper.calc_reward(metrics_pre['accuracy'])
-        reward = self.rl_helper.calc_reward(metrics_post['accuracy'])
+      if 'PSNR' in metrics_post:
+        reward_pre = self.rl_helper.calc_reward(metrics_pre['PSNR'])
+        reward = self.rl_helper.calc_reward(metrics_post['PSNR'])
       elif 'acc_top5' in metrics_post:
         reward_pre = self.rl_helper.calc_reward(metrics_pre['acc_top5'])
         reward = self.rl_helper.calc_reward(metrics_post['acc_top5'])

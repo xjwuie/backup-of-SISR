@@ -33,7 +33,7 @@ from learners.uniform_quantization.bit_optimizer import BitOptimizer
 FLAGS = tf.app.flags.FLAGS
 
 # Quantize parameters
-tf.app.flags.DEFINE_integer('uql_weight_bits', 4, \
+tf.app.flags.DEFINE_integer('uql_weight_bits', 8, \
     'Number of bits to use for quantizing weights')
 tf.app.flags.DEFINE_integer('uql_activation_bits', 32, \
     'Number of bits to use for quantizing activations')
