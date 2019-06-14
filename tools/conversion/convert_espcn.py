@@ -7,11 +7,11 @@ import scipy.ndimage
 import timeit
 
 image_low = 48
-scale = 3
+scale = 2
 
 def test():
-    ckpt_dir = '../../models_eval'
-    meta_file = '../../models_eval/model.ckpt.meta'
+    ckpt_dir = '../../models_dcp_eval/espcnp-2-48-dcp00'
+    meta_file = ckpt_dir + '/model.ckpt.meta'
 
     sess = tf.Session()
     saver = tf.train.import_meta_graph(meta_file)
@@ -287,10 +287,10 @@ def test_psnr(Images, Labels, sess, graph, outputs):
         res = sess.run([outputs], feed_dict={inputs: images})
 
         res_y = res[0]
-        res_y = res_y[:, :, :, 0] * 0.229 + res_y[:, :, :, 1] * 0.587 + res_y[:, :, :, 2] * 0.114
+        res_y = res_y[:, :, :, 0] * 0.299 + res_y[:, :, :, 1] * 0.587 + res_y[:, :, :, 2] * 0.114
         # res_y = np.expand_dims(res_y, 3)
         labels_y = np.array(labels, np.float32)
-        labels_y = labels_y[:, :, :, 0] * 0.229 + labels_y[:, :, :, 1] * 0.587 + labels_y[:, :, :, 2] * 0.114
+        labels_y = labels_y[:, :, :, 0] * 0.299 + labels_y[:, :, :, 1] * 0.587 + labels_y[:, :, :, 2] * 0.114
         # labels_y = np.expand_dims(labels_y, 3)
         # print((res_y - labels_y)[0][0])
         mse = np.mean(np.square(res_y - labels_y))
@@ -350,9 +350,9 @@ def preprocess(pic_file, input_size, output_size):
 
             patch_bic = scipy.misc.imresize(patch_low, (output_size, output_size), 'bicubic')
             patch_y = np.array(patch)
-            patch_y = patch[:, :, 0] * 0.229 + patch[:, :, 1] * 0.587 + patch[:, :, 2] * 0.114
+            patch_y = patch[:, :, 0] * 0.299 + patch[:, :, 1] * 0.587 + patch[:, :, 2] * 0.114
             patch_bic_y = np.array(patch_bic)
-            patch_bic_y = patch_bic[:, :, 0] * 0.229 + patch_bic[:, :, 1] * 0.587 + patch_bic[:, :, 2] * 0.114
+            patch_bic_y = patch_bic[:, :, 0] * 0.299 + patch_bic[:, :, 1] * 0.587 + patch_bic[:, :, 2] * 0.114
             mse = np.mean(np.square(patch_y - patch_bic_y))
             mse_bicubic += [mse]
             images += [patch_low]

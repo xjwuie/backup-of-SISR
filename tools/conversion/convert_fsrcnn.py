@@ -7,7 +7,7 @@ import timeit
 
 image_low = 48
 scale = 2
-m = 2
+m = 4
 
 def test():
     ckpt_dir = '../../models_uqtf_eval'
@@ -242,10 +242,10 @@ def test_psnr(Images, Labels, sess, graph, outputs):
         res = sess.run([outputs], feed_dict={inputs: images})
 
         res_y = res[0]
-        res_y = res_y[:, :, :, 0] * 0.229 + res_y[:, :, :, 1] * 0.587 + res_y[:, :, :, 2] * 0.114
+        res_y = res_y[:, :, :, 0] * 0.299 + res_y[:, :, :, 1] * 0.587 + res_y[:, :, :, 2] * 0.114
         # res_y = np.expand_dims(res_y, 3)
         labels_y = np.array(labels, np.float32)
-        labels_y = labels_y[:, :, :, 0] * 0.229 + labels_y[:, :, :, 1] * 0.587 + labels_y[:, :, :, 2] * 0.114
+        labels_y = labels_y[:, :, :, 0] * 0.299 + labels_y[:, :, :, 1] * 0.587 + labels_y[:, :, :, 2] * 0.114
         # labels_y = np.expand_dims(labels_y, 3)
         # print((res_y - labels_y)[0][0])
         mse = np.mean(np.square(res_y - labels_y))
@@ -299,8 +299,8 @@ def preprocess(pic_file, input_size, output_size):
     pic_bic = scipy.misc.imresize(pic_low, (x, y), 'bicubic')
     print(pic_bic.shape)
 
-    pic_y = pic[:, :, 0] * 0.229 + pic[:, :, 1] * 0.587 + pic[:, :, 2] * 0.114
-    pic_bic_y = pic_bic[:, :, 0] * 0.229 + pic_bic[:, :, 1] * 0.587 + pic_bic[:, :, 2] * 0.114
+    pic_y = pic[:, :, 0] * 0.299 + pic[:, :, 1] * 0.587 + pic[:, :, 2] * 0.114
+    pic_bic_y = pic_bic[:, :, 0] * 0.299 + pic_bic[:, :, 1] * 0.587 + pic_bic[:, :, 2] * 0.114
     mse_pic_y = np.mean(np.square(pic_bic_y - pic_y))
     mse_pic = np.mean(np.square(pic_bic - pic))
     psnr_pic_y = np.log10(255 * 255 / mse_pic_y) * 10
@@ -313,9 +313,9 @@ def preprocess(pic_file, input_size, output_size):
             patch = pic[r * output_size: (r+1) * output_size, c * output_size: (c+1) * output_size, :]
             patch_low = scipy.misc.imresize(patch, (input_size, input_size))
 
-            patch_bic = scipy.misc.imresize(patch_low, (output_size, output_size), 'bicubic')
-            patch_y = patch[:, :, 0] * 0.229 + patch[:, :, 1] * 0.587 + patch[:, :, 2] * 0.114
-            patch_bic_y = patch_bic[:, :, 0] * 0.229 + patch_bic[:, :, 1] * 0.587 + patch_bic[:, :, 2] * 0.114
+            patch_bic = scipy.misc.imresize(patch_low, (output_size, output_size))
+            patch_y = patch[:, :, 0] * 0.299 + patch[:, :, 1] * 0.587 + patch[:, :, 2] * 0.114
+            patch_bic_y = patch_bic[:, :, 0] * 0.299 + patch_bic[:, :, 1] * 0.587 + patch_bic[:, :, 2] * 0.114
             mse = np.mean(np.square(patch_y - patch_bic_y))
             mse_bicubic += [mse]
             images += [patch_low]
@@ -338,10 +338,10 @@ if __name__ == '__main__':
     # test()
 
     model_type = 'cp'
-    ckpt_dir = '../../test/fsrcnn2-2-48-dcp0'
+    ckpt_dir = '../../test/fsrcnn_cpr/fsrcnn-2-48-dcp0-cpr25'
     # ckpt_dir = '../../models_eval/fsrcnn-2-48'
     model_scope = 'model'
-    pruned_scope = 'pruned_model0'
+    pruned_scope = 'pruned_model_25'
     kernels = get_kernels(model_type, ckpt_dir, model_scope, pruned_scope)
 
     sess = tf.Session()
@@ -353,7 +353,7 @@ if __name__ == '__main__':
     Images, Labels = [], []
     # test_pic_dir = '../../../dataset/BSD300/BSDS300/images/test'
     # test_pic_dir = '../../../dataset/BSD500/BSR/BSDS500/data/images/test'
-    test_pic_dir = '../../../dataset/DIV2K_valid_HR'   # m=4 32.27 / 131.55
+    test_pic_dir = '../../../dataset/DIV2K_valid_HR'
     # test_pic_dir = '../../../dataset/Set5/Set5/HR'
     # test_pic_dir = '../../../dataset/Set14/HR'
     test_pics = os.listdir(test_pic_dir)

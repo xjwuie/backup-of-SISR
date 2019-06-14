@@ -121,11 +121,13 @@ def get_vars_dcp(ckpt_dir, scope):
         var = graph.get_tensor_by_name(name)
         new_name  ='gamma{}_kernel'.format(i)
         res[new_name] = sess.run(var)
+        print(res[new_name])
 
         name = name.replace('kernel', 'bias')
         var = graph.get_tensor_by_name(name)
         new_name = 'gamma{}_bias'.format(i)
         res[new_name] = sess.run(var)
+        print(res[new_name])
 
     for i in range(m + 3):
         name = scope + '/conv{}/kernel/read:0'.format(i)
@@ -327,7 +329,7 @@ def preprocess(pic_file, input_size, output_size):
     rows = x // output_size
     cols = y // output_size
 
-    pic_low = scipy.misc.imresize(pic, (x // scale, y // scale), 'bicubic')
+    pic_low = scipy.misc.imresize(pic, (x // scale, y // scale))
     # print(pic_low.shape)
     pic_bic = scipy.misc.imresize(pic_low, (x, y), 'bicubic')
     # print(pic_bic.shape)
@@ -371,10 +373,10 @@ if __name__ == '__main__':
     # test()
 
     model_type = 'cp'
-    # ckpt_dir = '../../test/fsrcnn-2-48-dcp0-dcp50'
-    ckpt_dir = '../../models_dcp_eval'
+    ckpt_dir = '../../test/mycnn-2-48-dcp0-dcp0'
+    # ckpt_dir = '../../models_eval'
     model_scope = 'model'
-    pruned_scope = 'pruned_model'
+    pruned_scope = 'pruned_model_0'
     kernels = get_kernels(model_type, ckpt_dir, model_scope, pruned_scope)
 
     sess = tf.Session()
@@ -389,8 +391,8 @@ if __name__ == '__main__':
 
     # gamma  32.36/134.97
     # m=3 32.33/132.31
-    # test_pic_dir = '../../../dataset/DIV2K_valid_HR'
-    test_pic_dir = '../../../dataset/Set5/Set5/HR'
+    test_pic_dir = '../../../dataset/DIV2K_valid_HR'
+    # test_pic_dir = '../../../dataset/Set5/Set5/HR'
     # test_pic_dir = '../../../dataset/Set14/HR'
     test_pics = os.listdir(test_pic_dir)
     test_pics = sorted(test_pics)

@@ -48,7 +48,7 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
 
         # class-independent initialization
         super(FullPrecLearner, self).__init__(sm_writer, model_helper)
-
+        model_scope = 'quan_model'
         # over-ride the model scope and distillation loss switch
         if model_scope is not None:
             self.model_scope = model_scope

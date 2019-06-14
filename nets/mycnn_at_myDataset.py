@@ -97,7 +97,7 @@ def forward_fn(inputs, data_format):
     # inputs = inputs - inputs_mean
     inputs = inputs / inputs_max
 
-    inputs = tf.layers.conv2d(inputs, 3, [1, 1], data_format=data_format, padding='SAME', name='gamma0')
+    inputs = tf.layers.conv2d(inputs, 3, [1, 1], data_format=data_format, padding='SAME', name='gamma0', use_bias=False)
 
     inputs = tf.layers.conv2d(inputs, d, [5, 5], data_format=data_format, padding='SAME', name='conv0')
     inputs = prelu(inputs, 0)
@@ -122,7 +122,7 @@ def forward_fn(inputs, data_format):
     inputs = tf.layers.conv2d_transpose(inputs, 3, [9, 9], (scale, scale),
                                         padding='SAME', data_format=data_format)
 
-    inputs = tf.layers.conv2d(inputs, 3, [1, 1], data_format=data_format, padding='SAME', name='gamma1')
+    inputs = tf.layers.conv2d(inputs, 3, [1, 1], data_format=data_format, padding='SAME', name='gamma1', use_bias=False)
 
     inputs = inputs * inputs_max
     # inputs = tf.clip_by_value(inputs, 0.0, 255.0)

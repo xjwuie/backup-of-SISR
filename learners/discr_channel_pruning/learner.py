@@ -72,7 +72,7 @@ def _phase_shift(I, r):
   a = b = FLAGS.input_size
   bsize = tf.shape(I)[0]  # Handling Dimension(None) type for undefined batch dim
   X = tf.reshape(I, shape=[-1, a, b, r, r])
-  X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
+  # X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
   X = tf.split(X, a, 1)  # a, [bsize, b, r, r]
   X = tf.concat([tf.squeeze(x, axis=1) for x in X], 2)  # bsize, b, a*r, r
   X = tf.split(X, b, 1)  # b, [bsize, a*r, r]

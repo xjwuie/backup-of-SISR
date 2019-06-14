@@ -190,11 +190,12 @@ def setup_lrn_rate_edsr_myDataset(global_step, batch_size):
   # nb_epochs = 20
   # idxs_epoch = [10, 15, 18]
 
-  nb_epochs = 8
+  nb_epochs = 20
   idxs_epoch = [int(0.25 * nb_epochs), int(0.5 * nb_epochs), int(0.75 * nb_epochs)]
 
-  # nb_epochs = 80
-  # idxs_epoch = [30, 50, 70]
+  # nb_epochs = 1
+  # idxs_epoch = [0]
+  # decay_rates = [0, 0]
 
   decay_rates = [1.0, 0.2, 0.05, 0.01]
   lrn_rate = setup_lrn_rate_piecewise_constant(global_step, batch_size, idxs_epoch, decay_rates)

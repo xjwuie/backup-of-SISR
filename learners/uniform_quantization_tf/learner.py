@@ -43,6 +43,8 @@ tf.app.flags.DEFINE_integer('uqtf_freeze_bn_delay', None,
                             'UT-TF: # of steps after which moving mean and variance are frozen \
                             and used instead of batch statistics during training.')
 tf.app.flags.DEFINE_float('uqtf_lrn_rate_dcy', 1e-2, 'UQ-TF: learning rate\'s decaying factor')
+tf.app.flags.DEFINE_string('uqtf_output_scope', 'quan_model', 'output name scope')
+tf.app.flags.DEFINE_string('uqtf_input_scope', 'model', 'input name scope')
 
 def get_vars_by_scope(scope):
   """Get list of variables within certain name scope.
@@ -75,8 +77,8 @@ class UniformQuantTFLearner(AbstractLearner):  # pylint: disable=too-many-instan
     super(UniformQuantTFLearner, self).__init__(sm_writer, model_helper)
 
     # define scopes for full & uniform quantized models
-    self.model_scope_full = 'model'
-    self.model_scope_quan = 'quant_model'
+    self.model_scope_full = FLAGS.uqtf_input_scope
+    self.model_scope_quan = FLAGS.uqtf_output_scope
 
     # download the pre-trained model
     if self.is_primary_worker('local'):

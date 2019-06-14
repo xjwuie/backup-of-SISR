@@ -10,10 +10,10 @@ from datasets.edsr_dataset import EdsrDataset
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_float('lrn_rate_init', 0.000001, 'initial learning rate  l1=0.0002')
+tf.app.flags.DEFINE_float('lrn_rate_init', 0.0002, 'initial learning rate  l1=0.0002')
 tf.app.flags.DEFINE_float('batch_size_norm', 128, 'normalization factor of batch size')
 tf.app.flags.DEFINE_float('momentum', 0.9, 'momentum coefficient')
-tf.app.flags.DEFINE_float('loss_w_dcy', 5e-1, 'weight decaying loss\'s coefficient')
+tf.app.flags.DEFINE_float('loss_w_dcy', 5e-4, 'weight decaying loss\'s coefficient')
 
 image_size = 96
 sr_scale = 2
@@ -48,7 +48,7 @@ def _phase_shift(I, r):
     a = b = image_low
     bsize = tf.shape(I)[0]  # Handling Dimension(None) type for undefined batch dim
     X = tf.reshape(I, shape=[-1, a, b, r, r])
-    X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
+    # X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
     X = tf.split(X, a, 1)  # a, [bsize, b, r, r]
     X = tf.concat([tf.squeeze(x, axis=1) for x in X], 2)  # bsize, b, a*r, r
     X = tf.split(X, b, 1)  # b, [bsize, a*r, r]
@@ -70,6 +70,13 @@ def log10(x):
     denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
     return numerator / denominator
 
+def prelu(x, i):
+    alphas = tf.get_variable('alpha{}'.format(i), x.get_shape()[-1],
+                             initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    pos = tf.nn.relu(x)
+    neg = alphas * (x - abs(x)) * 0.5
+
+    return pos + neg
 
 def forward_fn(inputs, data_format):
     features0 = 64
@@ -87,11 +94,14 @@ def forward_fn(inputs, data_format):
     inputs = inputs / inputs_max
     conv0 = tf.layers.conv2d(inputs, features0, [filter0, filter0],
                              data_format=data_format, padding='SAME', name="conv0",
-                             activation=tf.nn.tanh)
+                             activation=None)
+    conv0 = prelu(conv0, 0)
 
     conv1 = tf.layers.conv2d(conv0, features1, [filter1, filter1],
                              data_format=data_format, padding='SAME', name="conv1",
-                             activation=tf.nn.tanh)
+                             activation=None)
+
+    conv1 = prelu(conv1, 1)
 
     outputs = upsample(conv1, scale, features1, None)
     # outputs = tf.nn.sigmoid(outputs)
@@ -133,12 +143,12 @@ class ModelHelper(AbstractModelHelper):
         # outputs = outputs - tf.reduce_mean(outputs)
         # labels = labels - tf.reduce_mean(labels)
         # outputs = outputs - tf.reduce_mean(outputs)
-        # loss = tf.reduce_mean(tf.losses.absolute_difference(labels, outputs))
-        loss = tf.reduce_mean(tf.squared_difference(labels, outputs))
+        loss = tf.reduce_mean(tf.losses.absolute_difference(labels, outputs))
+        # loss = tf.reduce_mean(tf.squared_difference(labels, outputs))
         loss += FLAGS.loss_w_dcy * tf.add_n([tf.nn.l2_loss(var) for var in trainable_vars])
 
-        labels_y = labels[:, :, 0] * 0.229 + labels[:, :, 1] * 0.587 + labels[:, :, 2] * 0.114
-        outputs_y = outputs[:, :, 0] * 0.229 + outputs[:, :, 1] * 0.587 + outputs[:, :, 2] * 0.114
+        labels_y = labels[:, :, 0] * 0.299 + labels[:, :, 1] * 0.587 + labels[:, :, 2] * 0.114
+        outputs_y = outputs[:, :, 0] * 0.299 + outputs[:, :, 1] * 0.587 + outputs[:, :, 2] * 0.114
         mse_y = tf.reduce_mean(tf.squared_difference(labels_y, outputs_y))
         mse = tf.reduce_mean(tf.squared_difference(labels, outputs), axis=[1, 2, 3])
         MSE = tf.reduce_mean(mse)

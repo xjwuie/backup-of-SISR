@@ -129,7 +129,7 @@ class ModelHelper(AbstractModelHelper):
         SSIM = tf.image.ssim(outputs, labels, 255)
         SSIM = tf.reduce_mean(SSIM)
 
-        metrics = {'PSNR': PSNR, 'PSNR_Y':PSNR_Y, 'MSE': MSE, 'SSIM': SSIM}
+        metrics = {'PSNR': PSNR, 'PSNR_Y': PSNR_Y, 'MSE': MSE, 'SSIM': SSIM}
 
         return loss, metrics
 
